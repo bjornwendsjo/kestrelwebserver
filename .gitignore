@@ -1,0 +1,5 @@
+/Logs/*
+/obj/*
+/bin/*
+*.pfx
+.DS_Store
