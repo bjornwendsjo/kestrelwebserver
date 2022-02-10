@@ -7,7 +7,6 @@ using KestrelWebServer.Data;
 using Serilog;
 using Microsoft.Extensions.FileProviders;
 using Serilog.Events;
-using Microsoft.AspNetCore.Http.Extensions;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -19,9 +18,8 @@ namespace KestrelWebServer
         {
             Configuration = configuration;
         }
-
         public IConfiguration Configuration { get; }
-
+     
         // This method gets called by the runtime. Use this method to add services to the container.
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
@@ -34,6 +32,9 @@ namespace KestrelWebServer
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            bool isWindows = !Program.isUnix;
+            string pathDelimiter = (Program.isUnix ? "/" : @"\");
+            
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
@@ -73,27 +74,40 @@ namespace KestrelWebServer
             // https://docs.microsoft.com/en-us/aspnet/core/fundamentals/static-files?view=aspnetcore-3.1
             app.UseStaticFiles();
 
-            string rootDir = @"E:\SimpleWebServer\root";
+            string rootDir = Program.logPath;
+
             app.UseStaticFiles(new StaticFileOptions
             { FileProvider = new PhysicalFileProvider(rootDir), RequestPath = "" });
             Log.Information("Read static files in " + rootDir);
 
-            List<string> staticDirs = System.IO.File.ReadLines(rootDir + @"\" + "allowedStaticDirectories.txt").ToList();
+            List<string> staticDirs = System.IO.File.ReadLines(rootDir 
+                + pathDelimiter + "allowedStaticDirectories.txt").ToList(); // NB This file must exist
 
 			foreach (string dir in staticDirs)
 			{
-                if(dir.IndexOf(':')<0)  // Not an absolute path (like E:\mydir)
+                if(isWindows && (dir.IndexOf(':')<0))  // A Windows path relative to our root dir
                 {
                     app.UseStaticFiles(new StaticFileOptions
                     { FileProvider = new PhysicalFileProvider(rootDir + @"\" + dir), RequestPath = "/" + dir });
                     Log.Information("Read static files in " + rootDir + @"\" + dir);
                 }
-                else // It is an absolute path. 
-				{
-                    var dirs = dir.Split(@"\");
+                else if (isWindows) // An absolute Windows path (like E:\mydir) 
+                {
                     app.UseStaticFiles(new StaticFileOptions
-                    { FileProvider = new PhysicalFileProvider(dir), RequestPath = "/" + dirs.Last() });
+                    { FileProvider = new PhysicalFileProvider(dir), RequestPath = "/" + dir });  // Does this work?
                     Log.Information("Read static files in " + dir);
+                }
+                else if(dir[0] == '/') // An absolute Unix path like /home/bjorn/simplewebserver/css
+				{
+                    app.UseStaticFiles(new StaticFileOptions
+                    { FileProvider = new PhysicalFileProvider(dir), RequestPath = dir });
+                    Log.Information("Read static files in " + dir);
+                }
+                else  // A Unix path relative to our root dir
+                {
+                     app.UseStaticFiles(new StaticFileOptions
+                    { FileProvider = new PhysicalFileProvider(rootDir + "/" + dir), RequestPath = "/" + dir });
+                    Log.Information("Read static files in " + dir);                   
                 }
             }
 

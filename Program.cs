@@ -1,6 +1,7 @@
 using System;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
 using Serilog;
 using Serilog.Enrichers.AspnetcoreHttpcontext;
 
@@ -14,14 +15,18 @@ using Serilog.Enrichers.AspnetcoreHttpcontext;
 // https://github.com/trenoncourt/serilog-enrichers-aspnetcore-httpcontext
 // https://github.com/serilog/serilog-aspnetcore
 // https://www.humankode.com/asp-net-core/develop-locally-with-https-self-signed-certificates-and-asp-net-core
+// https://stackoverflow.com/questions/31453495/how-to-read-appsettings-values-from-a-json-file-in-asp-net-core
 
 namespace KestrelWebServer
 {
 	public class Program
 	{
-		static string logPath = @"E:\KestrelWebServer\Logs\log.txt"; /* <----------here---------- */
-
-		static string logTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3} {RequestScheme} {RemoteIpAddress} {RequestMethod} {Message:lj}{NewLine}{Exception}";
+		static IConfigurationRoot config = new ConfigurationBuilder()
+                .SetBasePath(System.IO.Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json").Build();
+    public static bool isUnix = System.Environment.OSVersion.Platform.ToString().Contains("Unix");
+		public static string logPath = isUnix ? config["AppSettings:rootDirUnix"] : config["AppSettings:rootDirWindows"];
+		static string logTemplate = config["Serilog:logTemplate"];
 
 		public static int Main(string[] args)
 		{
@@ -76,7 +81,9 @@ namespace KestrelWebServer
 						serverOptions.Listen(System.Net.IPAddress.Any, 5000);
 						serverOptions.Listen(System.Net.IPAddress.Any, 5001, listenOptions =>
 						{
-							listenOptions.UseHttps("qgis-xyz_wend_se.pfx", "kestreltestcert");
+							listenOptions.UseHttps(  // "qgis-xyz_wend_se.pfx", "kestreltestcert");
+								config["certificateSettings:fileName"],  
+								config["certificateSettings:password"]);								  
 						});
 					});
 
